@@ -3,14 +3,14 @@
   <ProjectSession>
     <PathDelim Value="\"/>
     <Version Value="10"/>
-    <BuildModes Active="Default"/>
+    <BuildModes Active="Release"/>
     <Units Count="3">
       <Unit0>
         <Filename Value="weed.lpr"/>
         <IsPartOfProject Value="True"/>
         <IsVisibleTab Value="True"/>
         <TopLine Value="186"/>
-        <CursorPos Y="203"/>
+        <CursorPos X="59" Y="201"/>
         <UsageCount Value="27"/>
         <Loaded Value="True"/>
       </Unit0>
