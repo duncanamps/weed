@@ -6,7 +6,7 @@ uses
   {$IFDEF UNIX}{$IFDEF UseCThreads}
   cthreads,
   {$ENDIF}{$ENDIF}
-  Classes, SysUtils, CustApp
+  Classes, SysUtils, CustApp, weed_date_utils
   { you can add units after this }   ;
 
 
@@ -49,6 +49,7 @@ type
     Lengths:        TParticleArray;
     MonthsToKeep:   integer;
     QuartersToKeep: integer;
+    RunDate:        TDateTime;
     UseFileDate:    boolean;
     Values:         TParticleArray;
     Verbose:        boolean;
@@ -56,9 +57,18 @@ type
     WeeksToKeep:    integer;
     constructor Create(TheOwner: TComponent); override;
     destructor Destroy; override;
+    procedure DeleteUnwantedFiles;
+    procedure IdentifyDeletionCandidates;
     procedure ProcessFileSpec(FileSpec: string);
+    procedure ProcessFileSpecDaily;
+    procedure ProcessFileSpecMonthly;
+    procedure ProcessFileSpecQuarterly;
+    procedure ProcessFileSpecWeekly;
+    procedure ProcessFileSpecYearly;
     procedure ProcessNumericOption(ShortSwitch: char; LongSwitch: string; var variable: integer; lowlimit: integer; highlimit: integer);
     procedure ProcessParticle(var spec: string; const particle: string; const replacement: string; var index: integer; var len: integer);
+    procedure ProcessParticleAll(var spec: string);
+    procedure SearchForFiles(spec: string);
     procedure SortWeedArray;
     procedure WriteBasicHelp;
     procedure WriteHelp; virtual;
@@ -153,11 +163,18 @@ begin
   Terminate;
 end;
 
+
+{ CONSTRUCTOR }
+
 constructor TWeed.Create(TheOwner: TComponent);
 begin
   inherited Create(TheOwner);
   StopOnException:=True;
+  RunDate := Now();
 end;
+
+
+{ DESTRUCTOR }
 
 destructor TWeed.Destroy;
 begin
@@ -165,256 +182,13 @@ begin
 end;
 
 
-{ Process a particle within the filespec }
+{ Delete unwanted files }
 
-procedure TWeed.ProcessParticle(var spec: string; const particle: string; const replacement: string; var index: integer; var len: integer);
+procedure TWeed.DeleteUnwantedFiles;
+var j: integer;
+    delete_flag: boolean;
+    input:       string;
 begin
-  if Debug then
-    WriteLn('Processing particle ' + particle);
-  if Pos(particle,spec) > 0 then
-    begin
-      index := Pos(particle,spec);
-      len   := Length(particle) - 1;
-      if Debug then
-        writeln('    Particle found at index ' + IntToStr(index) + ' in ' + spec);
-      Delete(spec,index,Length(particle));
-      Insert(replacement,spec,index);
-      if Debug then
-        writeln('    New spec is ' + spec);
-    end;
-end;
-
-
-{ Process an individual file specification }
-
-procedure TWeed.ProcessFileSpec(FileSpec: string);
-var SearchSpec:     string;
-    Info:           TSearchRec;
-    i:              TParticle;
-    Count:          integer;
-    j:              integer;
-    date_now:       TDateTime;
-    date_search:    TDateTime;
-    date_limit:     TDateTime;
-    y,m,d:          word;
-    delete_flag:    boolean;
-    input:          string;
-begin
-  writeln('PROCESSING filespec ' + FileSpec);
-  SearchSpec := FileSpec;
-  // Particle processing
-  for i := Low(TParticle) to High(TParticle) do
-    Indexes[i] := -1;
-  ProcessParticle(SearchSpec,'$YYYY','????',Indexes[tpYear],   Lengths[tpYear]);
-  ProcessParticle(SearchSpec,'$YY',  '??',  Indexes[tpYear],   Lengths[tpYear]);
-  ProcessParticle(SearchSpec,'$MM',  '??',  Indexes[tpMonth],  Lengths[tpMonth]);
-  ProcessParticle(SearchSpec,'$DD',  '??',  Indexes[tpDay],    Lengths[tpDay]);
-  ProcessParticle(SearchSpec,'$HH',  '??',  Indexes[tpHour],   Lengths[tpHour]);
-  ProcessParticle(SearchSpec,'$NN',  '??',  Indexes[tpMinute], Lengths[tpMinute]);
-  ProcessParticle(SearchSpec,'$SS',  '??',  Indexes[tpSecond], Lengths[tpSecond]);
-  // Now search for files
-  if Debug then
-    writeln('SearchSpec = ' + SearchSpec);
-  SetLength(WeedArray,0);
-  Count := 0;
-  if FindFirst(SearchSpec,0,Info) = 0 then
-    repeat
-      if Length(WeedArray) <= Count then             // Resize array if reqd
-        SetLength(WeedArray,Count + ARRAY_INCREMENT);
-      WeedArray[Count].Filename := ExtractFilePath(SearchSpec) + Info.Name;
-      WeedArray[Count].Filedate := EncodeDate(DEFAULT_YEAR,1,1);
-      WeedArray[Count].Status   := wsUnknown;
-      if Debug then
-        writeln('Found file ' + WeedArray[Count].Filename);
-      if UseFileDate then
-        WeedArray[Count].Filedate := FileDateToDateTime(Info.Time)
-      else
-        begin // Parse the date out of the filename
-          Values[tpYear]   := DEFAULT_YEAR;
-          Values[tpMonth]  := 1;
-          Values[tpDay]    := 1;
-          Values[tpHour]   := 0;
-          Values[tpMinute] := 0;
-          values[tpSecond] := 0;
-          for i := Low(TParticle) to High(TParticle) do
-            if Indexes[i] > 0 then
-              begin
-                Values[i] := StrToInt(Copy(WeedArray[Count].Filename,Indexes[i],Lengths[i]));
-                if (i = tpYear) and (Values[i] < 100) then
-                  begin
-                    Values[i] := Values[i] + 2000;
-                    if Values[i] >= EPOCH_YEAR + 100 then
-                      Values[i] := Values[i] - 100;
-                  end;
-              end;
-          WeedArray[Count].Filedate := ComposeDateTime(EncodeDate(Values[tpYear],Values[tpMonth],Values[tpDay]),
-                                                       EncodeTime(Values[tpHour],Values[tpMinute],Values[tpSecond],0));
-        end;
-      if Debug then
-        writeln('    Using date/time of ' + FormatDateTime('yyyy/mm/dd hh:nn:ss',WeedArray[Count].Filedate));
-      Inc(Count);
-    until FindNext(Info) <> 0;
-  SetLength(WeedArray,Count);
-
-  { Sort the array }
-  SortWeedArray;
-
-  { Process annual files }
-  if Verbose then
-    writeln('Processing annual files');
-  date_now := Now();
-  DecodeDate(date_now,y,m,d);
-  m := 1;
-  d := 1;
-  date_search := ComposeDateTime(EncodeDate(y,m,d),
-                                 EncodeTime(0,0,0,0));
-  if Debug then
-    writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
-  for j := 0 to Length(WeedArray) - 1 do
-    if WeedArray[j].Filedate < date_search then
-      begin
-        WeedArray[j].Status := wsYearly;
-        if Verbose then
-          writeln('    ' + WeedArray[j].Filename + ' assigned to YEARLY');
-        Dec(y);
-        date_search := ComposeDateTime(EncodeDate(y,m,d),
-                                       EncodeTime(0,0,0,0));
-        if Debug then
-          writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
-      end;
-
-  { Process quarterly files }
-
-  if Verbose then
-    writeln('Processing quarterly files');
-  date_limit := date_now - 365.25 * QuartersToKeep / 4.0;
-  DecodeDate(date_now,y,m,d);
-  d := 1;
-  while not (m in [1,4,7,10]) do
-    begin
-      Dec(m);
-      if m < 1 then
-        begin
-          m := 12;
-          Dec(y);
-        end;
-    end;
-  date_search := ComposeDateTime(EncodeDate(y,m,d),
-                                 EncodeTime(0,0,0,0));
-  if Debug then
-    begin
-      writeln('    Date limit  is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_limit));
-      writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
-    end;
-  for j := 0 to Length(WeedArray) - 1 do
-    if (WeedArray[j].Filedate < date_search) and (WeedArray[j].Filedate >= date_limit) then
-      begin
-        WeedArray[j].Status := wsQuarterly;
-        if Verbose then
-          writeln('    ' + WeedArray[j].Filename + ' assigned to QUARTERLY');
-        DecodeDate(WeedArray[j].Filedate,y,m,d);
-        d := 1;
-        while not (m in [1,4,7,10]) do
-          begin
-            Dec(m);
-            if m < 1 then
-              begin
-                m := 12;
-                Dec(y);
-              end;
-          end;
-        date_search := ComposeDateTime(EncodeDate(y,m,d),
-                                       EncodeTime(0,0,0,0));
-        if Debug then
-          writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
-      end;
-
-  { Process monthly files  }
-
-  if Verbose then
-    writeln('Processing monthly files');
-  date_limit := date_now - 365.25 * MonthsToKeep / 12.0;
-  DecodeDate(date_now,y,m,d);
-  d := 1;
-  date_search := ComposeDateTime(EncodeDate(y,m,d),
-                                 EncodeTime(0,0,0,0));
-  if Debug then
-    begin
-      writeln('    Date limit  is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_limit));
-      writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
-    end;
-  for j := 0 to Length(WeedArray) - 1 do
-    if (WeedArray[j].Filedate < date_search) and (WeedArray[j].Filedate >= date_limit) then
-      begin
-        WeedArray[j].Status := wsMonthly;
-        if Verbose then
-          writeln('    ' + WeedArray[j].Filename + ' assigned to MONTHLY');
-        DecodeDate(WeedArray[j].Filedate,y,m,d);
-        d := 1;
-        date_search := ComposeDateTime(EncodeDate(y,m,d),
-                                       EncodeTime(0,0,0,0));
-        if Debug then
-          writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
-      end;
-
-  { Process weekly files  }
-  if Verbose then
-    writeln('Processing weekly files');
-  date_limit := date_now - 7.0 * WeeksToKeep;
-  date_search := Trunc(date_now);
-  while DayOfWeek(date_search) > 1 do // Bump down to Sunday
-    date_search := date_search - 1.0;
-  if Debug then
-    begin
-      writeln('    Date limit  is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_limit));
-      writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
-    end;
-  for j := 0 to Length(WeedArray) - 1 do
-    if (WeedArray[j].Filedate < date_search) and (WeedArray[j].Filedate >= date_limit) then
-      begin
-        WeedArray[j].Status := wsWeekly;
-        if Verbose then
-          writeln('    ' + WeedArray[j].Filename + ' assigned to WEEKLY');
-        date_search := Trunc(WeedArray[j].Filedate - 1.0);
-        while DayOfWeek(date_search) > 1 do // Bump down to Sunday
-          date_search := date_search - 1.0;
-        if Debug then
-          writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
-      end;
-
-  { Process daily files  }
-  if Verbose then
-    writeln('Processing daily files');
-  date_limit := date_now - DaysToKeep - 0.5;
-  date_search := date_now;
-  date_search := ComposeDateTime(date_search,
-                                 EncodeTime(23,59,59,999));
-  if Debug then
-    begin
-      writeln('    Date limit  is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_limit));
-      writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
-    end;
-  for j := 0 to Length(WeedArray) - 1 do
-    if (WeedArray[j].Filedate <= date_search) and (WeedArray[j].Filedate >= date_limit) then
-      begin
-        WeedArray[j].Status := wsDaily;
-        date_search := date_search - 1.0;
-        if Verbose then
-          writeln('    ' + WeedArray[j].Filename + ' assigned to DAILY');
-        if Debug then
-          writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
-      end;
-
-  { Fix up files to delete }
-  for j := 0 to Length(WeedArray) - 1 do
-    if WeedArray[j].Status = wsUnknown then
-      begin
-        WeedArray[j].Status := wsDelete;
-        if Verbose then
-          writeln(WeedArray[j].Filename + ' becomes DELETED');
-      end;
-
-  { Finally, delete the files we don't need }
   for j := 0 to Length(WeedArray) - 1 do
     if WeedArray[j].Status = wsDelete then
       begin
@@ -436,9 +210,199 @@ begin
         else
           write('Cancelled delete of ' + WeedArray[j].Filename);
       end;
+end;
+
+
+{ Identify files to be marked for deletion }
+
+procedure TWeed.IdentifyDeletionCandidates;
+var j: integer;
+begin
+  for j := 0 to Length(WeedArray) - 1 do
+  if WeedArray[j].Status = wsUnknown then
+    begin
+      WeedArray[j].Status := wsDelete;
+      if Verbose then
+        writeln(WeedArray[j].Filename + ' becomes DELETED');
+    end;
+end;
+
+
+{ Process an individual file specification }
+
+procedure TWeed.ProcessFileSpec(FileSpec: string);
+var SearchSpec:     string;
+begin
+  writeln('PROCESSING filespec ' + FileSpec);
+  SearchSpec := FileSpec;
+
+  // Particle processing (encoded $ fields)
+  ProcessParticleAll(SearchSpec);
+
+  // Now search for files
+  SearchForFiles(SearchSpec);
+
+  { Sort the array }
+  SortWeedArray;
+
+  { Process all variations }
+  ProcessFileSpecYearly;
+  ProcessFileSpecQuarterly;
+  ProcessFileSpecMonthly;
+  ProcessFileSpecWeekly;
+  ProcessFileSpecDaily;
+
+  { Deal with deletion }
+  IdentifyDeletionCandidates;
+  DeleteUnwantedFiles;
 
   if Verbose then
     Writeln;
+end;
+
+
+{ Process file spec - daily }
+
+procedure TWeed.ProcessFileSpecDaily;
+var date_limit: TDateTime;
+    date_search: TDateTime;
+    j:           integer;
+begin
+  if Verbose then
+    writeln('Processing daily files');
+  date_limit := SubtractDays(RunDate,DaysToKeep);
+  date_search := RunDate;
+  date_search := ComposeDateTime(date_search,
+                                 EncodeTime(23,59,59,999));
+  if Debug then
+    begin
+      writeln('    Date limit  is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_limit));
+      writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
+    end;
+  for j := 0 to Length(WeedArray) - 1 do
+    if (WeedArray[j].Filedate <= date_search) and (WeedArray[j].Filedate >= date_limit) then
+      begin
+        WeedArray[j].Status := wsDaily;
+        date_search := date_search - 1.0;
+        if Verbose then
+          writeln('    ' + WeedArray[j].Filename + ' assigned to DAILY');
+        if Debug then
+          writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
+      end;
+end;
+
+
+{ Process file spec - monthly }
+
+procedure TWeed.ProcessFileSpecMonthly;
+var date_limit: TDateTime;
+    date_search: TDateTime;
+    j:           integer;begin
+  if Verbose then
+    writeln('Processing monthly files');
+  date_limit := SubtractMonths(RunDate,MonthsToKeep);
+  date_search := MonthStartPreceding(RunDate);
+  if Debug then
+    begin
+      writeln('    Date limit  is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_limit));
+      writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
+    end;
+  for j := 0 to Length(WeedArray) - 1 do
+    if (WeedArray[j].Filedate < date_search) and (WeedArray[j].Filedate >= date_limit) then
+      begin
+        WeedArray[j].Status := wsMonthly;
+        if Verbose then
+          writeln('    ' + WeedArray[j].Filename + ' assigned to MONTHLY');
+        date_search := MonthStartPreceding(date_search);
+        if Debug then
+          writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
+      end;
+end;
+
+
+{ Process file spec - quarterly }
+
+procedure TWeed.ProcessFileSpecQuarterly;
+var date_limit: TDateTime;
+    date_search: TDateTime;
+    j:           integer;
+begin
+  if Verbose then
+    writeln('Processing quarterly files');
+  date_limit := SubtractQuarters(RunDate,QuartersToKeep);
+  date_search := QuarterStartPreceding(RunDate);
+  if Debug then
+    begin
+      writeln('    Date limit  is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_limit));
+      writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
+    end;
+  for j := 0 to Length(WeedArray) - 1 do
+    if (WeedArray[j].Filedate < date_search) and (WeedArray[j].Filedate >= date_limit) then
+      begin
+        WeedArray[j].Status := wsQuarterly;
+        if Verbose then
+          writeln('    ' + WeedArray[j].Filename + ' assigned to QUARTERLY');
+        date_search := QuarterStartPreceding(date_search);
+        if Debug then
+          writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
+      end;
+end;
+
+
+{ Process file spec - weekly }
+
+procedure TWeed.ProcessFileSpecWeekly;
+var date_limit: TDateTime;
+    date_search: TDateTime;
+    j:           integer;
+begin
+  if Verbose then
+    writeln('Processing weekly files');
+  date_limit := SubtractWeeks(RunDate,WeeksToKeep);
+  date_search := Trunc(RunDate);
+  while DayOfWeek(date_search) > 1 do // Bump down to Sunday
+    date_search := date_search - 1.0;
+  if Debug then
+    begin
+      writeln('    Date limit  is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_limit));
+      writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
+    end;
+  for j := 0 to Length(WeedArray) - 1 do
+    if (WeedArray[j].Filedate < date_search) and (WeedArray[j].Filedate >= date_limit) then
+      begin
+        WeedArray[j].Status := wsWeekly;
+        if Verbose then
+          writeln('    ' + WeedArray[j].Filename + ' assigned to WEEKLY');
+        date_search := Trunc(WeedArray[j].Filedate - 1.0);
+        while DayOfWeek(date_search) > 1 do // Bump down to Sunday
+          date_search := date_search - 1.0;
+        if Debug then
+          writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
+      end;
+end;
+
+
+{ Process file spec - yearly }
+
+procedure TWeed.ProcessFileSpecYearly;
+var date_search: TDateTime;
+    j:           integer;
+begin
+  if Verbose then
+    writeln('Processing annual files');
+  date_search := YearStartPreceding(RunDate);
+  if Debug then
+    writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
+  for j := 0 to Length(WeedArray) - 1 do
+    if WeedArray[j].Filedate < date_search then
+      begin
+        WeedArray[j].Status := wsYearly;
+        if Verbose then
+          writeln('    ' + WeedArray[j].Filename + ' assigned to YEARLY');
+        date_search := YearStartPreceding(date_search);
+        if Debug then
+          writeln('    Date search is ' + FormatDateTime('yyyy/mm/dd hh:nn',date_search));
+      end;
 end;
 
 
@@ -473,6 +437,94 @@ begin
 end;
 
 
+{ Process a particle within the filespec }
+
+procedure TWeed.ProcessParticle(var spec: string; const particle: string; const replacement: string; var index: integer; var len: integer);
+begin
+  if Debug then
+    WriteLn('Processing particle ' + particle);
+  if Pos(particle,spec) > 0 then
+    begin
+      index := Pos(particle,spec);
+      len   := Length(particle) - 1;
+      if Debug then
+        writeln('    Particle found at index ' + IntToStr(index) + ' in ' + spec);
+      Delete(spec,index,Length(particle));
+      Insert(replacement,spec,index);
+      if Debug then
+        writeln('    New spec is ' + spec);
+    end;
+end;
+
+
+{ Process all potential particles }
+
+procedure TWeed.ProcessParticleAll(var spec: string);
+var i: TParticle;
+begin
+  for i := Low(TParticle) to High(TParticle) do
+    Indexes[i] := -1;
+  ProcessParticle(spec,'$YYYY','????',Indexes[tpYear],   Lengths[tpYear]);
+  ProcessParticle(spec,'$YY',  '??',  Indexes[tpYear],   Lengths[tpYear]);
+  ProcessParticle(spec,'$MM',  '??',  Indexes[tpMonth],  Lengths[tpMonth]);
+  ProcessParticle(spec,'$DD',  '??',  Indexes[tpDay],    Lengths[tpDay]);
+  ProcessParticle(spec,'$HH',  '??',  Indexes[tpHour],   Lengths[tpHour]);
+  ProcessParticle(spec,'$NN',  '??',  Indexes[tpMinute], Lengths[tpMinute]);
+  ProcessParticle(spec,'$SS',  '??',  Indexes[tpSecond], Lengths[tpSecond]);
+end;
+
+
+{ Search for files that match the spec }
+
+procedure TWeed.SearchForFiles(spec: string);
+var Count: integer;
+    Info:  TSearchRec;
+    i:     TParticle;
+begin
+  if Debug then
+    writeln('SearchSpec = ' + spec);
+  SetLength(WeedArray,0);
+  Count := 0;
+  if FindFirst(spec,0,Info) = 0 then
+    repeat
+      if Length(WeedArray) <= Count then             // Resize array if reqd
+        SetLength(WeedArray,Count + ARRAY_INCREMENT);
+      WeedArray[Count].Filename := ExtractFilePath(spec) + Info.Name;
+      WeedArray[Count].Filedate := EncodeDate(DEFAULT_YEAR,1,1);
+      WeedArray[Count].Status   := wsUnknown;
+      if Debug then
+        writeln('Found file ' + WeedArray[Count].Filename);
+      if UseFileDate then
+        WeedArray[Count].Filedate := FileDateToDateTime(Info.Time)
+      else
+        begin // Parse the date out of the filename
+          Values[tpYear]   := DEFAULT_YEAR;
+          Values[tpMonth]  := 1;
+          Values[tpDay]    := 1;
+          Values[tpHour]   := 0;
+          Values[tpMinute] := 0;
+          values[tpSecond] := 0;
+          for i := Low(TParticle) to High(TParticle) do
+            if Indexes[i] > 0 then
+              begin
+                Values[i] := StrToInt(Copy(WeedArray[Count].Filename,Indexes[i],Lengths[i]));
+                if (i = tpYear) and (Values[i] < 100) then
+                  begin
+                    Values[i] := Values[i] + 2000;
+                    if Values[i] >= EPOCH_YEAR + 100 then
+                      Values[i] := Values[i] - 100;
+                  end;
+              end;
+          WeedArray[Count].Filedate := ComposeDateTime(EncodeDate(Values[tpYear],Values[tpMonth],Values[tpDay]),
+                                                       EncodeTime(Values[tpHour],Values[tpMinute],Values[tpSecond],0));
+        end;
+      if Debug then
+        writeln('    Using date/time of ' + FormatDateTime('yyyy/mm/dd hh:nn:ss',WeedArray[Count].Filedate));
+      Inc(Count);
+    until FindNext(Info) <> 0;
+  SetLength(WeedArray,Count);
+end;
+
 { Sort the weed array }
 
 procedure TWeed.SortWeedArray;
@@ -494,6 +546,7 @@ begin
         end;
   until sorted;
 end;
+
 
 { Show some basic help if no parameters have been specified at all }
 
@@ -539,13 +592,13 @@ begin
   writeln('OPTION           FUNCTION                       DEFAULT');
   writeln('------------     -------------------------      -------');
   writeln('-d n,--days=n    Number of days to keep         ' + IntToStr(DEFAULT_DAYS_TO_KEEP));
-  writeln('-e,--debug       Print additional debug info    N/A');
-  writeln('-f,--filedate    Ignore $fields, use file date  N/A');
-  writeln('-h,--help        Show help intructions          N/A');
+  writeln('-e,--debug       Print additional debug info');
+  writeln('-f,--filedate    Ignore $fields, use file date');
+  writeln('-h,--help        Show help intructions');
   writeln('-m n,--months=n  Number of months to keep       ' + IntToStr(DEFAULT_MONTHS_TO_KEEP));
-  writeln('-n,--nocomfirm   No confirm of deletes          N/A');
+  writeln('-n,--nocomfirm   No confirm of deletes');
   writeln('-q,--quarters=n  Number of quarters to keep     ' + IntToStr(DEFAULT_QUARTERS_TO_KEEP));
-  writeln('-v,--verbose     Print additional info          N/A');
+  writeln('-v,--verbose     Print additional info');
   writeln('-w n,--weeks=n   Number of weeks to keep        ' + IntToStr(DEFAULT_WEEKS_TO_KEEP));
 end;
 

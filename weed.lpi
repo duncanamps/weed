@@ -20,7 +20,7 @@
       <UseVersionInfo Value="True"/>
       <AutoIncrementBuild Value="True"/>
       <MinorVersionNr Value="1"/>
-      <BuildNr Value="4"/>
+      <BuildNr Value="6"/>
       <StringTable CompanyName="Templar Mace Limited" FileDescription="weed" InternalName="weed" LegalCopyright="Copyright (C)2017 Templar Mace Limited" ProductName="weed" ProductVersion=""/>
     </VersionInfo>
     <BuildModes Count="2">
@@ -34,7 +34,8 @@
           </Target>
           <SearchPaths>
             <IncludeFiles Value="$(ProjOutDir)"/>
-            <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
+            <OtherUnitFiles Value="units"/>
+            <UnitOutputDirectory Value="lib\release\$(TargetCPU)-$(TargetOS)"/>
           </SearchPaths>
           <CodeGeneration>
             <SmartLinkUnit Value="True"/>
@@ -60,11 +61,15 @@
         <CommandLineParams Value="D:\backups\mysql\rpi1603-lamp\evohome\dump_evohome_$YYYY$MM$DD_$HH$NN.sql.gz --verbose --debug --days=28"/>
       </local>
     </RunParams>
-    <Units Count="1">
+    <Units Count="2">
       <Unit0>
         <Filename Value="weed.lpr"/>
         <IsPartOfProject Value="True"/>
       </Unit0>
+      <Unit1>
+        <Filename Value="units\weed_date_utils.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit1>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -75,7 +80,8 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
+      <OtherUnitFiles Value="units"/>
+      <UnitOutputDirectory Value="lib\debug\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>
       <SyntaxOptions>
