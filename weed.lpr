@@ -2,11 +2,31 @@ program weed;
 
 {$mode objfpc}{$H+}
 
+{
+    weed - Thins out regular archive files
+    Copyright (C)2017-2022 Duncan Munro
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+    Contact: Duncan Munro  duncan@duncanamps.com
+}
+
 uses
   {$IFDEF UNIX}{$IFDEF UseCThreads}
   cthreads,
   {$ENDIF}{$ENDIF}
-  Classes, SysUtils, CustApp, weed_date_utils
+  Classes, SysUtils, CustApp, weed_date_utils, weed_license
   { you can add units after this }   ;
 
 
@@ -18,8 +38,8 @@ const
   DEFAULT_QUARTERS_TO_KEEP = 8;
   DEFAULT_YEAR             = 2000;
   EPOCH_YEAR               = 1990;
-  OPTIONS_SHORT : string = 'd:efhm:nqvw:';
-  OPTIONS_LONG : array[0..8] of string = ('days:','debug','filedate','help','months:','noconfirm','quarters:','verbose','weeks:');
+  OPTIONS_SHORT : string = 'd:efhlm:nqvw:';
+  OPTIONS_LONG : array[0..9] of string = ('days:','debug','filedate','help','license','months:','noconfirm','quarters:','verbose','weeks:');
 
 type
   TParticle = (tpYear,tpMonth,tpDay,tpHour,tpMinute,tpSecond);
@@ -72,6 +92,7 @@ type
     procedure SortWeedArray;
     procedure WriteBasicHelp;
     procedure WriteHelp; virtual;
+    procedure WriteLicense;
   end;
 
 { TWeed }
@@ -97,11 +118,19 @@ begin
     end;
 
   // parse parameters
-  if HasOption('h', 'help') then begin
-    WriteHelp;
-    Terminate(0);
-    Exit;
-  end;
+  if HasOption('h', 'help') then
+    begin
+      WriteHelp;
+      Terminate(0);
+      Exit;
+    end;
+
+  if HasOption('l', 'license') then
+    begin
+      WriteLicense;
+      Terminate(0);
+      Exit;
+    end;
 
   { add your program here }
   if not Terminated then
@@ -523,6 +552,8 @@ begin
       Inc(Count);
     until FindNext(Info) <> 0;
   SetLength(WeedArray,Count);
+  if Debug then
+    writeln(Format('    Count of files found matching spec is %d',[Count]));
 end;
 
 { Sort the weed array }
@@ -552,54 +583,38 @@ end;
 
 procedure TWeed.WriteBasicHelp;
 begin
-  writeln('WEED V1.0 Copyright (C)2017 Templar Mace Limited');
+  writeln(COPYRIGHT_MSG);
   writeln('');
   writeln('For help, type  weed --help');
 end;
 
 
-{ Long help if the --help flag has been used }
+{ Long help if the -h/--help flag has been used }
 
 procedure TWeed.WriteHelp;
 begin
   { add your help code here }
-  writeln('WEED V1.0 Copyright (C)2017 Templar Mace Limited');
-  writeln('');
-  writeln('Usage: ');
-  writeln('');
-  writeln('    weed filespec [filespec] [options]');
-  writeln('    weed --help');
-  writeln('');
-  writeln('Filespec is filename encoded with $fields in the following example:');
-  writeln('');
-  writeln('    weed mysql_dump_sales_$YYYY$MM$DD_$HH$NN.sql.gz');
-  writeln('');
-  writeln('Will match the following filenames:');
-  writeln('');
-  writeln('    mysql_dump_sales_20161122_0700.sql.gz');
-  writeln('    mysql_dump_sales_20170901_1422.sql.gz');
-  writeln('');
-  writeln('The following $fields are defined:');
-  writeln('');
-  writeln('    $YYYY Year with 4 digits');
-  writeln('    $YY   Year with 2 digits');
-  writeln('    $MM   Month with 2 digits');
-  writeln('    $DD   Day of month with 2 digits');
-  writeln('    $HH   Hour in 24 hour format with 2 digits');
-  writeln('    $NN   Minutes with 2 digits');
-  writeln('    $SS   Seconds with 2 digits');
-  writeln('');
-  writeln('OPTION           FUNCTION                       DEFAULT');
-  writeln('------------     -------------------------      -------');
-  writeln('-d n,--days=n    Number of days to keep         ' + IntToStr(DEFAULT_DAYS_TO_KEEP));
+  writeln(HELP_PREAMBLE);
+  writeln('OPTION           FUNCTION                        DEFAULT');
+  writeln('------------     -------------------------       -------');
+  writeln('-d n,--days=n    Number of days to keep          ' + IntToStr(DEFAULT_DAYS_TO_KEEP));
   writeln('-e,--debug       Print additional debug info');
   writeln('-f,--filedate    Ignore $fields, use file date');
   writeln('-h,--help        Show help intructions');
-  writeln('-m n,--months=n  Number of months to keep       ' + IntToStr(DEFAULT_MONTHS_TO_KEEP));
+  writeln('-l, --license    Show the license/warranty info');
+  writeln('-m n,--months=n  Number of months to keep        ' + IntToStr(DEFAULT_MONTHS_TO_KEEP));
   writeln('-n,--nocomfirm   No confirm of deletes');
-  writeln('-q,--quarters=n  Number of quarters to keep     ' + IntToStr(DEFAULT_QUARTERS_TO_KEEP));
+  writeln('-q,--quarters=n  Number of quarters to keep      ' + IntToStr(DEFAULT_QUARTERS_TO_KEEP));
   writeln('-v,--verbose     Print additional info');
-  writeln('-w n,--weeks=n   Number of weeks to keep        ' + IntToStr(DEFAULT_WEEKS_TO_KEEP));
+  writeln('-w n,--weeks=n   Number of weeks to keep         ' + IntToStr(DEFAULT_WEEKS_TO_KEEP));
+end;
+
+
+{ License information if the -l/--license flag has been used }
+
+procedure TWeed.WriteLicense;
+begin
+  writeln(LICENSE_MSG);
 end;
 
 var

@@ -1,63 +1,7 @@
-# Compiled source #
-###################
-*.com
-*.compiled
-*.class
-*.dll
-*.exe
-*.o
-*.obj
-*.or
-*.pdf
-*.ppu
+weed_todo_list.xlsx
+weed_batch.*
 *.res
-*.so
-**/_deprecated/*
-**/_vti_cnf/*
-**/_vti_pvt/*
-**/backup/*
-debug_*
-compiled/
-compiled_debug/*
-compiled_dump/*
-compiled_release/*
-rectifiers/converted/*
-
-# Packages #
-############
-# it's better to unpack these files and commit the raw source
-# git has its own built in compression methods
-*.7z
-*.dmg
-*.gz
-*.iso
-*.jar
-*.rar
-*.tar
-*.zip
-
-# Logs and databases #
-######################
-*.csv
 *.log
-*.sql
-*.sqlite
-*.sqlite3
-dumpfile.csv
-
-# Backup and debug files #
-##########################
-*.~*
-*.bak
-*.dbg
-
-# OS generated files #
-######################
-.DS_Store
-.DS_Store?
-._*
-.picasa.ini
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+backup/
+binaries/debug/
+lib/

@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CONFIG>
   <ProjectOptions>
-    <Version Value="10"/>
+    <Version Value="12"/>
     <PathDelim Value="\"/>
     <General>
       <Flags>
         <MainUnitHasCreateFormStatements Value="False"/>
+        <MainUnitHasTitleStatement Value="False"/>
+        <MainUnitHasScaledStatement Value="False"/>
+        <CompatibilityMode Value="True"/>
       </Flags>
       <SessionStorage Value="InProjectDir"/>
-      <MainUnit Value="0"/>
       <Title Value="weed"/>
       <UseAppBundle Value="False"/>
       <ResourceType Value="res"/>
@@ -20,8 +22,8 @@
       <UseVersionInfo Value="True"/>
       <AutoIncrementBuild Value="True"/>
       <MinorVersionNr Value="1"/>
-      <BuildNr Value="6"/>
-      <StringTable CompanyName="Templar Mace Limited" FileDescription="weed" InternalName="weed" LegalCopyright="Copyright (C)2017 Templar Mace Limited" ProductName="weed" ProductVersion=""/>
+      <BuildNr Value="8"/>
+      <StringTable FileDescription="weed" InternalName="weed" LegalCopyright="Copyright (C)2017-2022 Duncan Munro" ProductName="weed"/>
     </VersionInfo>
     <BuildModes Count="2">
       <Item1 Name="Debug" Default="True"/>
@@ -30,7 +32,7 @@
           <Version Value="11"/>
           <PathDelim Value="\"/>
           <Target>
-            <Filename Value="weed"/>
+            <Filename Value="binaries\$(TargetOS)-$(TargetCPU)\weed"/>
           </Target>
           <SearchPaths>
             <IncludeFiles Value="$(ProjOutDir)"/>
@@ -57,11 +59,18 @@
     </PublishOptions>
     <RunParams>
       <local>
-        <FormatVersion Value="1"/>
-        <CommandLineParams Value="D:\backups\mysql\rpi1603-lamp\evohome\dump_evohome_$YYYY$MM$DD_$HH$NN.sql.gz --verbose --debug --days=28"/>
+        <CommandLineParams Value="D:\backups\rpi1709-lamp\mysql\amateur\dump_amateur_$YYYY$MM$DD_$HH$NN.sql.gz --verbose --debug"/>
       </local>
+      <FormatVersion Value="2"/>
+      <Modes Count="1">
+        <Mode0 Name="default">
+          <local>
+            <CommandLineParams Value="D:\backups\rpi1709-lamp\mysql\amateur\dump_amateur_$YYYY$MM$DD_$HH$NN.sql.gz --verbose --debug"/>
+          </local>
+        </Mode0>
+      </Modes>
     </RunParams>
-    <Units Count="2">
+    <Units Count="3">
       <Unit0>
         <Filename Value="weed.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -70,13 +79,17 @@
         <Filename Value="units\weed_date_utils.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit1>
+      <Unit2>
+        <Filename Value="units\weed_license.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit2>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
     <Version Value="11"/>
     <PathDelim Value="\"/>
     <Target>
-      <Filename Value="weed"/>
+      <Filename Value="binaries\debug\$(TargetOS)-$(TargetCPU)\weed"/>
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
