@@ -1,4 +1,4 @@
-# lacogen1
+# weed
 weed - archive thinning tool - v1.1
 
 #### Synopsis
